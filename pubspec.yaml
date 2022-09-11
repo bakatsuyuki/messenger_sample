@@ -38,6 +38,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   flutter_riverpod: 2.0.0-dev.9
   firebase_core:
+  firebase_database:
 
 dev_dependencies:
   flutter_test:
