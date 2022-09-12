@@ -9,9 +9,7 @@ import 'package:flutterfire_ui/auth.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  print('run開始');
   await Firebase.initializeApp();
-  print('initializeApp終了');
   runApp(const MyApp());
 }
 
@@ -39,21 +37,66 @@ class MyHomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    print('ここ');
-    print(ref.watch(userProvider));
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
       ),
       body: const _Page(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // ボタンタップ時に呼ばれる
-          // ここでカウンターのインクリメントをしている
-          ref.read(incrementProvider)();
-        },
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+    );
+  }
+}
+
+class _TextField extends ConsumerWidget {
+  const _TextField({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      color: Theme.of(context).primaryColor,
+      padding: const EdgeInsets.all(8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: TextField(
+                focusNode: ref.watch(nodeProvider),
+                controller: ref.watch(textEditingController),
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                maxLines: null,
+                decoration: const InputDecoration(
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide.none,
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide.none,
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: () {
+              ref.read(sendMessage)();
+            },
+            icon: Icon(
+              Icons.send,
+              color: Theme.of(context).colorScheme.onPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -71,27 +114,23 @@ class _Page extends ConsumerWidget {
                     EmailProviderConfiguration(),
                   ],
                 )
-              : Center(
-                  child: ref.watch(counterProvider).when(
-                        data: (data) => Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text(
-                              'ボタンを押した回数は:',
-                            ),
-                            Text(
-                              // 更新を検知したいので `watch` で取得
-                              '$data',
-                              style: Theme.of(context).textTheme.headline4,
-                            ),
-                          ],
+              : ref.watch(messagesProvider).when(
+                    data: (data) => Column(
+                      children: [
+                        Expanded(
+                          child: ListView(
+                            children:
+                                data.map((e) => Text(e.toString())).toList(),
+                          ),
                         ),
-                        loading: () => Container(),
-                        error: (Object error, StackTrace? stackTrace) {
-                          return Container();
-                        },
-                      ),
-                ),
+                        const _TextField(),
+                      ],
+                    ),
+                    loading: () => Container(),
+                    error: (Object error, StackTrace? stackTrace) {
+                      return Container();
+                    },
+                  ),
           error: (_, __) => Container(),
           loading: () => Container(),
         );
@@ -118,6 +157,37 @@ final incrementProvider = Provider(
   },
 );
 
+final messagesProvider = StreamProvider((ref) {
+  return ref.watch(messagesRefProvider).onValue.transform(
+    StreamTransformer<DatabaseEvent, List<Object?>>.fromHandlers(
+        handleData: (value, sink) {
+      sink.add(value.snapshot.value as List<Object?>);
+    }),
+  );
+});
+
+final messagesRefProvider = Provider((ref) {
+  return FirebaseDatabase.instance.ref('messages');
+});
+
+final sendMessage = Provider(
+  (ref) => () {
+    final currentValue = ref.read(messagesProvider).value;
+    final message = ref.read(textEditingController).text;
+    ref.read(messagesRefProvider).set((currentValue?.toList()?..add(message)));
+    ref.read(textEditingController).text = '';
+    ref.read(nodeProvider).unfocus();
+  },
+);
+
 final userProvider = StreamProvider((ref) {
   return FirebaseAuth.instance.authStateChanges();
+});
+
+final textEditingController = Provider((_) {
+  return TextEditingController();
+});
+
+final nodeProvider = Provider((_) {
+  return FocusNode();
 });
